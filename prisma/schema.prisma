@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model app_reviews {
+  id           BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id BigInt                @db.UnsignedBigInt
+  rating       Int?                  @db.UnsignedTinyInt
+  feedback     String?               @db.Text
+  reviewed     app_reviews_reviewed?
+  created_at   DateTime?             @db.Timestamp(0)
+  updated_at   DateTime?             @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model charges {
+  id              BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id    BigInt
+  total_used_unit BigInt?
+  price           Decimal?          @db.Decimal(10, 2)
+  discount        Decimal?          @db.Decimal(5, 2)
+  store_credit    Decimal?          @db.Decimal(5, 2)
+  trial_ends_on   DateTime?         @db.Date
+  billing_on      DateTime          @db.Date
+  install_on      DateTime          @db.Date
+  uninstall_on    DateTime?         @db.Date
+  is_active       charges_is_active
+  temp_billing_on DateTime?         @db.Date
+  app_plan        charges_app_plan?
+  created_at      DateTime?         @db.Timestamp(0)
+  updated_at      DateTime?         @db.Timestamp(0)
+  deleted_at      DateTime?         @db.Timestamp(0)
+}
+
+model emojis {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  festival_name String
+  emoji_code    Json
+  images        Json
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+}
+
+model failed_jobs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique(map: "failed_jobs_uuid_unique")
+  connection String   @db.Text
+  queue      String   @db.Text
+  payload    String   @db.LongText
+  exception  String   @db.LongText
+  failed_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model images {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  setting_id BigInt    @db.UnsignedBigInt
+  image_path String
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+}
+
+model jobs {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  queue        String
+  payload      String @db.LongText
+  attempts     Int    @db.UnsignedTinyInt
+  reserved_at  Int?   @db.UnsignedInt
+  available_at Int    @db.UnsignedInt
+  created_at   Int    @db.UnsignedInt
+
+  @@index([queue], map: "jobs_queue_index")
+}
+
+model migrations {
+  id        Int    @id @default(autoincrement()) @db.UnsignedInt
+  migration String
+  batch     Int
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model my_effects {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id    BigInt
+  effect_name     String
+  my_date         DateTime  @db.Date
+  is_every_year   Boolean   @default(false)
+  is_mix          Boolean   @default(false)
+  my_images       Json?
+  created_at      DateTime? @db.Timestamp(0)
+  updated_at      DateTime? @db.Timestamp(0)
+  deleted_at      DateTime? @db.Timestamp(0)
+  media_ids       Json?
+  my_images_local Json?
+  slug            String?   @unique(map: "my_effects_slug_unique")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model password_resets {
+  email      String
+  token      String
+  created_at DateTime? @db.Timestamp(0)
+
+  @@index([email], map: "password_resets_email_index")
+  @@ignore
+}
+
+model personal_access_tokens {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  tokenable_type String
+  tokenable_id   BigInt    @db.UnsignedBigInt
+  name           String
+  token          String    @unique(map: "personal_access_tokens_token_unique") @db.VarChar(64)
+  abilities      String?   @db.Text
+  last_used_at   DateTime? @db.Timestamp(0)
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+
+  @@index([tokenable_type, tokenable_id], map: "personal_access_tokens_tokenable_type_tokenable_id_index")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model seasonal_festivals {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id  BigInt
+  festival_list Json?
+  deleted_at    DateTime? @db.Timestamp(0)
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+}
+
+
+model settings {
+  id               BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id     BigInt
+  greeting_title   String?
+  greeting_message String?             @db.Text
+  background_color String?             @db.VarChar(255)
+  deleted_at       DateTime?           @db.Timestamp(0)
+  created_at       DateTime?           @db.Timestamp(0)
+  updated_at       DateTime?           @db.Timestamp(0)
+  timer            Int?
+  title_color      String?             @db.VarChar(255)
+  media_type       settings_media_type @default(color)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model shop_users {
+  id                BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  shopify_id        BigInt                       @unique @db.UnsignedBigInt  
+  shop              String                       @unique @db.VarChar(255)
+  myshopify_domain  String                       @unique @db.VarChar(255)
+  domain            String                       @db.VarChar(255)
+  currency          String?                      @db.VarChar(255)
+  shopify_token     String?                      @db.VarChar(255)
+  store_name        String                       @db.VarChar(255)
+  store_email       String                       @db.VarChar(255)
+  shop_owner        String?
+  plan_name         String?                      @db.VarChar(255)
+  charge_id         String?                      @db.VarChar(255)
+  billing_on        DateTime?                    @db.Timestamp(0)
+  activated_on      DateTime?                    @db.Timestamp(0)
+  trial_ends_on     DateTime?                    @db.Timestamp(0)
+  is_install        shop_users_is_install        @default(NotInstalled)
+  is_charge_approve shop_users_is_charge_approve @default(NotApproved)
+  is_enabled        shop_users_is_enabled        @default(Disabled)
+  app_plan          shop_users_app_plan?
+  install_date      DateTime?                    @db.Timestamp(0)
+  uninstall_date    DateTime?                    @db.Timestamp(0)
+  created_at        DateTime?                    @db.Timestamp(0)
+  updated_at        DateTime?                    @db.Timestamp(0)
+  deleted_at        DateTime?                    @db.Timestamp(0)
+  is_app_updated    shop_users_is_app_updated    @default(NotUpdated)
+  app_open_counter  Int?                         @default(0) @db.UnsignedInt
+  show_popup        shop_users_show_popup        @default(false)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model store_emojis {
+  id                  BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  shop_user_id        BigInt
+  festival_name       String
+  emoji_code          Json?
+  pre_built_images    Json?
+  custom_images       Json?
+  created_at          DateTime? @db.Timestamp(0)
+  updated_at          DateTime? @db.Timestamp(0)
+  custom_local_images Json?
+  media_ids           Json?
+  image_details       Json?
+}
+
+enum app_reviews_reviewed {
+  yes
+  delayed
+}
+
+enum charges_is_active {
+  unactive          @map("0")
+  active            @map("1")
+  uninstall         @map("2")
+  test_to_live      @map("3")
+  free_trial_expand @map("4")
+  close_store       @map("5")
+}
+
+
+enum settings_media_type {
+  color
+  image
+}
+
+enum charges_app_plan {
+  Free       @map("1")
+  Starter    @map("2")
+  Growth     @map("3")
+  Enterprise @map("4")
+}
+
+enum shop_users_is_install {
+  Installed    @map("1")
+  NotInstalled @map("0")
+}
+
+enum shop_users_is_charge_approve {
+  Approved    @map("1")
+  NotApproved @map("0")
+}
+
+enum shop_users_is_enabled {
+  Enabled  @map("1")
+  Disabled @map("0")
+}
+
+enum shop_users_app_plan {
+  Free       @map("1")
+  Starter    @map("2")
+  Growth     @map("3")
+  Enterprise @map("4")
+}
+
+enum shop_users_is_app_updated {
+  Updated    @map("1")
+  NotUpdated @map("0")
+}
+
+enum shop_users_show_popup {
+  true
+  false
+}
+

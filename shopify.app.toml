@@ -1,0 +1,23 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "01f049eff5c44e24c0f9629d6b5f6e4a"
+name = "greeto-2026"
+application_url = "https://example.com/"
+embedded = true
+handle = "greeto-2026"
+
+[webhooks]
+api_version = "2025-04"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_customers,read_draft_orders,read_orders,read_products,write_customers,write_draft_orders,write_orders,write_products"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
