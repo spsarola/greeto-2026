@@ -1,13 +1,37 @@
 import { useEffect } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server"; // adjust path if needed
+import { info } from "../utils/logger.server";
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
-  return null;
+  // const shop = url.searchParams.get("shop");
+  const shop = session.shop;
+  // 2. Get shop_user_id for the shop
+  const shopUser = await prisma.shop_users.findFirst({
+    where: { shop },
+    select: { id: true },
+  });
+
+  // 3. Get stored emoji/images for this shop user and festival
+  let storedEmoji = null;
+  if (shopUser) {
+    storedEmoji = await prisma.store_emojis.findMany({
+      where: { shop_user_id: shopUser.id },
+      select: {
+        festival_name: true,
+      },
+    });
+  }
+
+  return {
+    shop,
+    storedEmoji
+  };
 };
 
 export const action = async ({ request }) => {
@@ -76,6 +100,8 @@ export const action = async ({ request }) => {
 };
 
 export default function Index() {
+  const { storedEmoji, shop } = useLoaderData();
+  info(shop);
   const fetcher = useFetcher();
   const shopify = useAppBridge();
   const isLoading =
