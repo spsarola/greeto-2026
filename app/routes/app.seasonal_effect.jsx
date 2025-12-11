@@ -42,7 +42,7 @@ const hinduFestivals = [
 function FestivalCheckbox({ festival, checked, onChange, onEdit }) {
   // Open modal on check, but not on uncheck
   const handleCheckboxChange = () => {
-    alert("change");
+    // alert("change");
     onChange();
     if (!checked) {
       onEdit();
@@ -180,18 +180,12 @@ export default function SeasonalEffect() {
   
   const emojiModalRef = useRef(null);
   const handleEdit = (festival) => {
-    alert("edit button clicked = " + festival);
     setSelectedFestival(festival);
     setModalOpen(true);
-    const modal = emojiModalRef.current;
-    modal.showOverlay();
   };
 
   const handleClose = () => {
     setModalOpen(false);
-    // const emojiModal = document.getElementById("modal");
-    const modal = emojiModalRef.current;
-    modal.hideOverlay();
     setSelectedFestival(null);
   };
 
@@ -264,27 +258,6 @@ export default function SeasonalEffect() {
         currentClickedCheckbox={selectedFestival?.name || ""}
         upComingFestivalDate={selectedFestival?.date || ""}
       />
-
-      <>
-  <s-button commandFor="modal">Open</s-button>
-
-  <s-modal ref={emojiModalRef} id="modal" heading="Details">
-    <s-paragraph>Displaying more details here.</s-paragraph>
-
-    <s-button slot="secondary-actions" commandFor="modal" command="--hide">
-      Close
-    </s-button>
-    <s-button
-      slot="primary-action"
-      variant="primary"
-      commandFor="modal"
-      command="--hide"
-    >
-      Save
-    </s-button>
-  </s-modal>
-</>
-
       <s-stack gap="400">
         <s-text variant="heading2xl" as="h1">
           Seasonal Effect
