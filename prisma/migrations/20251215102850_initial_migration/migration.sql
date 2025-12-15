@@ -169,6 +169,7 @@ CREATE TABLE `seasonal_festivals` (
     `created_at` TIMESTAMP(0) NULL,
     `updated_at` TIMESTAMP(0) NULL,
 
+    UNIQUE INDEX `seasonal_festivals_shop_user_id_key`(`shop_user_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

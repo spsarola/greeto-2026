@@ -63,7 +63,7 @@ export const actionNew = async ({ request }) => {
     
 };
 export const action = async ({ request }) => {
-    // info('store emojis action called');
+    info('store emojis action called');
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -112,29 +112,19 @@ export const action = async ({ request }) => {
     // Derive shop_user_id from authenticated session (do not trust client-supplied IDs)
     const { session } = await authenticate.admin(request);
     const shop = session?.shop;
-    // info('shop eee', shop)
+
     if (!shop) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    // const shopUser = await prisma.shop_users.findFirst({ where: { shop : shop } });
-    // info('just before shop user');
+
     const shopUser = await prisma.shop_users.findFirst({ where: { shop : shop } });
 
     if (!shopUser) return Response.json({ error: "Shop user not found" }, { status: 404 });
 
-    // info('shopUserrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr')
-    // info(shopUser)
-
-    // info('step before existing');
-    // info({ "festival_name": festival_name, "shop_user_id": shopUser.id });
     const existing = await prisma.store_emojis.findFirst({
       where: { "festival_name" : festival_name, "shop_user_id" : shopUser.id },
     });
 
-    // info('step existing');
-    // info(existing);
-
     if (existing) {
-        // info('inside if');
       const updated = await prisma.store_emojis.update({
         where: { id: existing.id },
         data: {
@@ -143,7 +133,6 @@ export const action = async ({ request }) => {
           updated_at: new Date(),
         },
       });
-      // info('after update');
       return Response.json({ success: true, record: updated });
     } else {
       const created = await prisma.store_emojis.create({
@@ -158,9 +147,8 @@ export const action = async ({ request }) => {
       return Response.json({ success: true, record: created });
     }
   } catch (err) {
-    // info('err')
-    // info(err)
-    console.error("DB error:", err);
-    return Response.json({ error: "Failed to store emojis" }, { status: 500 });
+    /* console.error("DB error:")
+    console.log(err); */
+    return Response.json({ error: "Failed to store emojis", data:err }, { status: 500 });
   }
 };

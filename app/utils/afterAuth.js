@@ -101,6 +101,7 @@ async function getShopData(session) {
 }
 
 export async function afterAuth(session) {
+  info("afterAuth called for shop:", { shop: session.shop });
   const shopData = await getShopData(session);
   if (shopData) await shopUserCreateOrUpdate(session, shopData);
 }

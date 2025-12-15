@@ -1,15 +1,14 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useFetcher, useLoaderData } from "react-router";
+import { useLoaderData, useSubmit, useActionData } from "react-router";
 import ModelBox from "../components/ModelBox";
-// import { useFetcher, useLoaderData, useSubmit } from "@remix-run/react";
 import { env } from "../utils/helper";
-
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-// import { json } from "@remix-run/node";
-import prisma from "../db.server"; // adjust path if needed
+import prisma from "../db.server";
 import SaveBarWrapper from "../components/common/SaveBarWrapper";
 import { info } from "../utils/logger.server";
+
+/* ---------------- FESTIVALS ---------------- */
 
 const christianFestivals = [
   { name: "Christmas", date: "2024-12-01" },
@@ -37,269 +36,223 @@ const hinduFestivals = [
   { name: "Ganesh Chaturthi" },
 ];
 
-// Removed EmojiModal. Use ModelBox instead.
+/* ---------------- CHECKBOX COMPONENT ---------------- */
 
 function FestivalCheckbox({ festival, checked, onChange, onEdit }) {
-  // Open modal on check, but not on uncheck
   const handleCheckboxChange = () => {
-    // alert("change");
     onChange();
-    if (!checked) {
-      onEdit();
-    }
+    if (!checked) onEdit();
   };
+
   return (
     <div
       style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 220 }}
     >
-      
       <s-checkbox
+        name="selectedFestivals[]"
+        value={festival.name}
         label={festival.name}
         checked={checked}
         onChange={handleCheckboxChange}
-        commandFor="modal"
-        command="--show"
       />
       {checked && (
-
-        <span style={{ cursor: "pointer" }} onClick={onEdit}>
-          <s-button commandFor="emojiModal" command="--show" variant="tertiary" accessibilityLabel="Add product"><s-icon type="edit" commandFor="modal" color="base" /></s-button>
-        </span>
+        <s-button
+          variant="tertiary"
+          onClick={onEdit}
+          accessibilityLabel="Edit Festival"
+        >
+          <s-icon type="edit" />
+        </s-button>
       )}
     </div>
   );
 }
 
+/* ---------------- LOADER ---------------- */
+
 export const loader = async ({ request }) => {
-  console.log("Loader called for SeasonalEffect route");
-  const { session, admin } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const festival_name = url.searchParams.get("festival_name");
-  // const shop = url.searchParams.get("shop");
+  const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  // Guard: If no festival_name, return minimal data (prevents Prisma error)
-  let data = {};
-  if (!festival_name) {
-    info("ifffffffff festival_name:-----------", festival_name);
-  } else {
-    info("festival_name:-----------", festival_name);
-
-    // 1. Get available emojis/images for the festival
-    const data = await prisma.emojis.findFirst({
-      where: { festival_name },
-    });
-  }
-
-  // 2. Get shop_user_id for the shop
   const shopUser = await prisma.shop_users.findFirst({
     where: { shop },
     select: { id: true },
   });
 
-  // 3. Get stored emoji/images for this shop user and festival
-  let storedEmoji = null;
+  let selectedFestivals = [];
+
   if (shopUser) {
-    storedEmoji = await prisma.store_emojis.findMany({
-      where: { shop_user_id: shopUser.id },
-      select: {
-        festival_name: true,
+    const record = await prisma.seasonal_festivals.findFirst({
+      where: {
+        shop_user_id: shopUser.id,
+        deleted_at: null,
       },
+      select: { festival_list: true },
     });
+
+    selectedFestivals = record?.festival_list ?? [];
   }
 
-  const selectedEmoji = storedEmoji?.emoji_code || "";
-  const selectedImages = storedEmoji?.pre_built_images || "";
-  const customImages = storedEmoji?.custom_images || "";
-
-  const xyzzz = {
-    data: data?.emoji_code ?? [],
-    festivalImages: data?.images ?? [],
-    selectedImages: selectedImages ?? [],
-    festival_name: data?.festival_name ?? festival_name,
-    selected_emoji: selectedEmoji ?? [],
-    customImages: customImages ?? [],
-  };
-
-  console.log("Loader returning data:");
-  console.log(xyzzz);
-
   return {
-    shop: shop ?? "sachin.myshopify.com",
-    data: data?.emoji_code ?? [],
-    festivalImages: data?.images ?? [],
-    selectedImages: selectedImages ?? [],
-    festival_name: data?.festival_name ?? festival_name,
-    selected_emoji: selectedEmoji ?? [],
-    customImages: customImages ?? [],
+    shop,
+    selectedFestivals,
   };
-  return null;
 };
+
+/* ---------------- ACTION ---------------- */
 
 export const action = async ({ request }) => {
-  info("store emojis action called");
-  const { admin } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
 
-  // You can add logic here to handle form submissions or checkbox updates
-  return null;
+  const formData = await request.formData();
+  const selectedFestivals = formData.getAll("selectedFestivals[]");
+
+  info("Saving festivals:", selectedFestivals);
+
+  const shopUser = await prisma.shop_users.findFirst({
+    where: { shop },
+    select: { id: true },
+  });
+
+  if (!shopUser) return null;
+
+  await prisma.seasonal_festivals.upsert({
+    where: {
+      shop_user_id: shopUser.id,
+    },
+    update: {
+      festival_list: selectedFestivals,
+      updated_at: new Date(),
+    },
+    create: {
+      shop_user_id: shopUser.id,
+      festival_list: selectedFestivals,
+      created_at: new Date(),
+    },
+  });
+
+  return { success: true, data: Date.now() };
 };
+
+/* ---------------- COMPONENT ---------------- */
 
 export default function SeasonalEffect() {
   const shopify = useAppBridge();
-  // const submit = useSubmit();
-  const appName = env("APP_NAME", "Greeto: Sesasonal Effect");
-  const {
-    shop,
-    festivalImages,
-    selectedImages,
-    festival_name,
-    selected_emoji,
-    customImages,
-  } = useLoaderData();
+  const submit = useSubmit();
+  const formRef = useRef(null);
+  const actionData = useActionData();
 
-  console.log("SeasonalEffect component loader data:");
-  console.log({
-    shop,
-    festivalImages,
-    selectedImages,
-    festival_name,
-    selected_emoji,
-    customImages,
-  });
+  const { shop, selectedFestivals } = useLoaderData();
+  const appName = env("APP_NAME", "Greeto: Seasonal Effect");
+
+  /* ----- Modal State ----- */
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFestival, setSelectedFestival] = useState(null);
-  const [checkedChristian, setCheckedChristian] = useState({
-    Christmas: true,
-    Easter: false,
-    "Good Friday": false,
-    Halloween: true,
+
+  /* ----- Checkbox State (hydrated from DB) ----- */
+  const [checkedFestivals, setCheckedFestivals] = useState(() => {
+    const obj = {};
+    selectedFestivals.forEach((f) => (obj[f] = true));
+    return obj;
   });
-  const [checkedHindu, setCheckedHindu] = useState({});
 
   const [dirty, setDirty] = useState(false);
-  
-  const emojiModalRef = useRef(null);
+
+  /* ----- Handlers ----- */
+
   const handleEdit = (festival) => {
     setSelectedFestival(festival);
     setModalOpen(true);
   };
 
-  const handleClose = () => {
-    setModalOpen(false);
-    setSelectedFestival(null);
-  };
-
-  const handleChristianCheck = (festival) => {
-    setCheckedChristian((prev) => ({
+  const handleToggle = (festival) => {
+    setCheckedFestivals((prev) => ({
       ...prev,
       [festival.name]: !prev[festival.name],
     }));
     setDirty(true);
   };
 
-  const handleHinduCheck = (festival) => {
-    setCheckedHindu((prev) => ({
-      ...prev,
-      [festival.name]: !prev[festival.name],
-    }));
-    setDirty(true);
+  const handleSave = () => {
+    const fd = new FormData(formRef.current);
+    submit(fd, { method: "post", navigate: false });
   };
 
-  useEffect(() => {
-    if (dirty) {
-      console.log("dirty changed to true, showing SaveBar");
-      shopify.saveBar.show("my-save-bar");
-    } else {
-      console.log("dirty changed to false, hiding SaveBar");
-      shopify.saveBar.hide("my-save-bar");
-    }
-  }, [dirty, shopify]);
-
-  // Methods requested: simple console + setDirty(false)
-  const handleAfterSaveBarHide = () => {
-    console.log("[Parent] SaveBar hidden, clearing dirty");
+  const handleDiscard = () => {
     setDirty(false);
   };
 
-  const handleSave = async () => {
-    console.log("[Parent] Saving...");
-    // do save work here
+  /* ----- SaveBar Control ----- */
+  useEffect(() => {
+    if (dirty) shopify.saveBar.show("my-save-bar");
+    else shopify.saveBar.hide("my-save-bar");
+  }, [dirty, shopify]);
 
-    submit(
-      {
-        intent: "save",
-        festival_name: "festivalName",
-        // For arrays, either send multiple values with same key using FormData,
-        // or use JSON enctype (shown below):
-        christian: checkedChristian,
-        hindu: checkedHindu,
-      },
-      { method: "post", encType: "application/json", navigate: false }, // stay on page
-    );
-  };
+  /* ---------------- RENDER ---------------- */
 
-  const handleDiscard = async () => {
-    console.log("[Parent] Discarding...");
-    // reset form fields here
-  };
-  
+  useEffect(() => {
+    console.log('sssssssssssssssssssssssssssssssssssssssssssssssssssssssss');
+    if (actionData?.success) {
+      shopify.toast.show("Festivals saved successfully 🎉",{ duration: 3000 });
+      setDirty(false); // hide SaveBar
+    }
+
+    if (actionData?.success === false) {
+      shopify.toast.show("Failed to save", { isError: true, duration: 5000 });
+    }
+  }, [actionData, shopify]);
 
   return (
-    <s-page>
-      <TitleBar title={appName} />
+    <s-page heading="Seasonal Effect">
+      <s-link slot="breadcrumb-actions" href="/">
+        {appName}
+      </s-link>
+
       <SaveBarWrapper
-        onHide={handleAfterSaveBarHide}
         onSave={handleSave}
         onDiscard={handleDiscard}
+        onHide={() => setDirty(false)}
       />
+
       <ModelBox
         isOpen={modalOpen}
-        onClose={handleClose}
+        onClose={() => setModalOpen(false)}
         currentClickedCheckbox={selectedFestival?.name || ""}
         upComingFestivalDate={selectedFestival?.date || ""}
       />
-      <s-stack gap="400">
-        <s-text variant="heading2xl" as="h1">
-          Seasonal Effect
-        </s-text>
-        <s-section>
-          <s-text variant="headingLg" as="h2">
-            Christian Calender Festivals
-          </s-text>
-          <s-stack gap="200">
-            <div style={{ display: "flex", gap: 32 }}>
-              {christianFestivals.map((festival) => (
-                <FestivalCheckbox
-                  key={festival.name}
-                  festival={festival}
-                  checked={!!checkedChristian[festival.name]}
-                  onChange={() => handleChristianCheck(festival)}
-                  onEdit={() => handleEdit(festival)}
-                  commandFor="modal"
-                />
-              ))}
-            </div>
-          </s-stack>
+
+      <form method="post" ref={formRef}>
+        <s-section heading="Christian Calendar Festivals">
+          <div style={{ display: "flex", gap: 10 }}>
+            {christianFestivals.map((festival) => (
+              <FestivalCheckbox
+                key={festival.name}
+                festival={festival}
+                checked={!!checkedFestivals[festival.name]}
+                onChange={() => handleToggle(festival)}
+                onEdit={() => handleEdit(festival)}
+              />
+            ))}
+          </div>
         </s-section>
-        <s-section sectioned>
-          <s-text variant="headingLg" as="h2" style={{ marginBottom: 16 }}>
-            Hindu Calender Festivals
-          </s-text>
-          <s-stack gap="200">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 32 }}>
-              {hinduFestivals.map((festival) => (
-                <FestivalCheckbox
-                  key={festival.name}
-                  festival={festival}
-                  checked={!!checkedHindu[festival.name]}
-                  onChange={() => handleHinduCheck(festival)}
-                  onEdit={() => handleEdit(festival)}
-                />
-              ))}
-            </div>
-          </s-stack>
+
+        <br />
+
+        <s-section heading="Hindu Calendar Festivals">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {hinduFestivals.map((festival) => (
+              <FestivalCheckbox
+                key={festival.name}
+                festival={festival}
+                checked={!!checkedFestivals[festival.name]}
+                onChange={() => handleToggle(festival)}
+                onEdit={() => handleEdit(festival)}
+              />
+            ))}
+          </div>
         </s-section>
-      </s-stack>
+      </form>
     </s-page>
   );
 }

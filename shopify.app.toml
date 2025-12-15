@@ -6,6 +6,9 @@ application_url = "https://example.com/"
 embedded = true
 handle = "greeto-2026"
 
+[build]
+automatically_update_urls_on_dev = true
+
 [webhooks]
 api_version = "2025-04"
 
@@ -18,6 +21,3 @@ redirect_urls = [ "https://example.com/api/auth" ]
 
 [pos]
 embedded = false
-
-[build]
-automatically_update_urls_on_dev = true

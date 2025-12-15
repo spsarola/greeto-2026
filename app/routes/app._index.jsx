@@ -4,7 +4,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server"; // adjust path if needed
-import { info } from "../utils/logger.server";
+// import { info } from "../utils/logger.server";
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
@@ -101,7 +101,6 @@ export const action = async ({ request }) => {
 
 export default function Index() {
   const { storedEmoji, shop } = useLoaderData();
-  info(shop);
   const fetcher = useFetcher();
   const shopify = useAppBridge();
   const isLoading =
