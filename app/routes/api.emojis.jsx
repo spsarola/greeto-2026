@@ -1,8 +1,18 @@
 import prisma from "../db.server";
+import { authenticate } from "../shopify.server";
 import { info } from "../utils/logger.server";
+
 
 export const loader = async ({ request }) => {
   info("this is the emojis loader");
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+  info("shop in emojis loader", shop);
+
+  const shopUser = await prisma.shop_users.findFirst({
+      where: { shop },
+      select: { id: true },
+  });
 
   try {
     const url = new URL(request.url);
@@ -23,6 +33,10 @@ export const loader = async ({ request }) => {
       where: { festival_name: festivalName },
       select: { emoji_code: true, images: true },
     });
+    const storeEmojis = await prisma.store_emojis.findMany({
+      where: { festival_name: festivalName, shop_user_id: shopUser.id },
+      select: { emoji_code: true, pre_built_images: true, custom_images: true },
+    });
 
     info("emojis");
     info(emojis);
@@ -30,7 +44,8 @@ export const loader = async ({ request }) => {
     return Response.json(
       {
         success: true,
-        data: emojis,
+        data: {emojis, storeEmojis },
+        oldData: emojis,
         error: null,
       },
       { status: 200 }

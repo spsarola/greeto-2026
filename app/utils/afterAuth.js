@@ -21,6 +21,8 @@ const SHOPIFY_API_VERSION = getApiVersionFromToml();
  */
 async function shopUserCreateOrUpdate(session, shopData) {
   const createObj = {
+
+    shopify_g_id: shopData.id,
     shopify_id: shopData.id.match(/\d+$/)[0],
     shop: session.shop,
     myshopify_domain: session.shop,

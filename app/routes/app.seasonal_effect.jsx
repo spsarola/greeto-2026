@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useLoaderData, useSubmit, useActionData } from "react-router";
+import { useLoaderData, useFetcher } from "react-router";
 import ModelBox from "../components/ModelBox";
 import { env } from "../utils/helper";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import SaveBarWrapper from "../components/common/SaveBarWrapper";
@@ -45,9 +45,7 @@ function FestivalCheckbox({ festival, checked, onChange, onEdit }) {
   };
 
   return (
-    <div
-      style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 220 }}
-    >
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 220 }}>
       <s-checkbox
         name="selectedFestivals[]"
         value={festival.name}
@@ -56,11 +54,7 @@ function FestivalCheckbox({ festival, checked, onChange, onEdit }) {
         onChange={handleCheckboxChange}
       />
       {checked && (
-        <s-button
-          variant="tertiary"
-          onClick={onEdit}
-          accessibilityLabel="Edit Festival"
-        >
+        <s-button variant="tertiary" onClick={onEdit}>
           <s-icon type="edit" />
         </s-button>
       )}
@@ -93,64 +87,120 @@ export const loader = async ({ request }) => {
     selectedFestivals = record?.festival_list ?? [];
   }
 
-  return {
-    shop,
-    selectedFestivals,
-  };
+  return { shop, selectedFestivals };
 };
 
 /* ---------------- ACTION ---------------- */
-
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const shop = session.shop;
+  try {
+    info("SeasonalEffect save started");
 
-  const formData = await request.formData();
-  const selectedFestivals = formData.getAll("selectedFestivals[]");
+    const { session, admin } = await authenticate.admin(request);
+    const shop = session.shop;
 
-  info("Saving festivals:", selectedFestivals);
+    const formData = await request.formData();
+    const selectedFestivals = formData.getAll("selectedFestivals[]");
 
-  const shopUser = await prisma.shop_users.findFirst({
-    where: { shop },
-    select: { id: true },
-  });
+    info("Selected festivals received", selectedFestivals);
 
-  if (!shopUser) return null;
+    // 1️⃣ Find shop user
+    const shopUser = await prisma.shop_users.findFirst({
+      where: { shop },
+      select: { id: true },
+    });
 
-  await prisma.seasonal_festivals.upsert({
-    where: {
-      shop_user_id: shopUser.id,
-    },
-    update: {
-      festival_list: selectedFestivals,
-      updated_at: new Date(),
-    },
-    create: {
-      shop_user_id: shopUser.id,
-      festival_list: selectedFestivals,
-      created_at: new Date(),
-    },
-  });
+    if (!shopUser) {
+      info("Shop user not found", { shop });
+      return { success: false, error: "Shop user not found" };
+    }
 
-  return { success: true, data: Date.now() };
+    // 2️⃣ Save to DB
+    await prisma.seasonal_festivals.upsert({
+      where: { shop_user_id: shopUser.id },
+      update: {
+        festival_list: selectedFestivals,
+        updated_at: new Date(),
+      },
+      create: {
+        shop_user_id: shopUser.id,
+        festival_list: selectedFestivals,
+        created_at: new Date(),
+      },
+    });
+
+    info("Seasonal festivals saved in DB");
+
+    // 3️⃣ Save Shopify metafield (Laravel equivalent)
+    const METAFIELD_UPSERT = `
+      mutation metafieldUpsert($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            namespace
+            key
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const metafieldResponse = await admin.graphql(METAFIELD_UPSERT, {
+      variables: {
+        metafields: [
+          {
+            ownerId: shopUser.shopify_gid,
+            namespace: "greeto_seasonal_data",
+            key: "festivals",
+            type: "json",
+            value: JSON.stringify(selectedFestivals),
+          },
+        ],
+      },
+    });
+
+    const metafieldResult = await metafieldResponse.json();
+
+    if (metafieldResult?.data?.metafieldsSet?.userErrors?.length) {
+      info("Metafield userErrors", metafieldResult.data.metafieldsSet.userErrors);
+      return {
+        success: false,
+        error: "Metafield save failed",
+      };
+    }
+
+    info("Shopify metafield saved successfully");
+
+    return { success: true };
+  } catch (error) {
+    info("SeasonalEffect save FAILED", {
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    return {
+      success: false,
+      error: "Unexpected error occurred",
+    };
+  }
 };
+
 
 /* ---------------- COMPONENT ---------------- */
 
 export default function SeasonalEffect() {
   const shopify = useAppBridge();
-  const submit = useSubmit();
+  const fetcher = useFetcher();
   const formRef = useRef(null);
-  const actionData = useActionData();
 
   const { shop, selectedFestivals } = useLoaderData();
   const appName = env("APP_NAME", "Greeto: Seasonal Effect");
 
-  /* ----- Modal State ----- */
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFestival, setSelectedFestival] = useState(null);
 
-  /* ----- Checkbox State (hydrated from DB) ----- */
   const [checkedFestivals, setCheckedFestivals] = useState(() => {
     const obj = {};
     selectedFestivals.forEach((f) => (obj[f] = true));
@@ -176,7 +226,7 @@ export default function SeasonalEffect() {
 
   const handleSave = () => {
     const fd = new FormData(formRef.current);
-    submit(fd, { method: "post", navigate: false });
+    fetcher.submit(fd, { method: "post" });
   };
 
   const handleDiscard = () => {
@@ -189,19 +239,24 @@ export default function SeasonalEffect() {
     else shopify.saveBar.hide("my-save-bar");
   }, [dirty, shopify]);
 
-  /* ---------------- RENDER ---------------- */
-
+  /* ----- Toast after save ----- */
   useEffect(() => {
-    console.log('sssssssssssssssssssssssssssssssssssssssssssssssssssssssss');
-    if (actionData?.success) {
-      shopify.toast.show("Festivals saved successfully 🎉",{ duration: 3000 });
-      setDirty(false); // hide SaveBar
+    if (fetcher.state === "idle" && fetcher.data?.success) {
+      shopify.toast.show("Festivals saved successfully 🎉", {
+        duration: 3000,
+      });
+      setDirty(false);
     }
 
-    if (actionData?.success === false) {
-      shopify.toast.show("Failed to save", { isError: true, duration: 5000 });
+    if (fetcher.state === "idle" && fetcher.data?.success === false) {
+      shopify.toast.show("Failed to save", {
+        isError: true,
+        duration: 5000,
+      });
     }
-  }, [actionData, shopify]);
+  }, [fetcher.state, fetcher.data, shopify]);
+
+  /* ---------------- RENDER ---------------- */
 
   return (
     <s-page heading="Seasonal Effect">
@@ -225,9 +280,9 @@ export default function SeasonalEffect() {
       <form method="post" ref={formRef}>
         <s-section heading="Christian Calendar Festivals">
           <div style={{ display: "flex", gap: 10 }}>
-            {christianFestivals.map((festival) => (
+            {christianFestivals.map((festival, i) => (
               <FestivalCheckbox
-                key={festival.name}
+                key={`chri-fest-chk-${i}-${festival.name}`}
                 festival={festival}
                 checked={!!checkedFestivals[festival.name]}
                 onChange={() => handleToggle(festival)}
@@ -241,9 +296,9 @@ export default function SeasonalEffect() {
 
         <s-section heading="Hindu Calendar Festivals">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {hinduFestivals.map((festival) => (
+            {hinduFestivals.map((festival, i) => (
               <FestivalCheckbox
-                key={festival.name}
+                key={`hindu-fest-chk-${i}-${festival.name}`}
                 festival={festival}
                 checked={!!checkedFestivals[festival.name]}
                 onChange={() => handleToggle(festival)}

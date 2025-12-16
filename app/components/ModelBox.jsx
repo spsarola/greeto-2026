@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import { getUpcomingFestivalDate } from "../utils/helper";
-
-// import { Modal, TextContainer, Spinner, Checkbox, Card, Text, Button } from "@shopify/polaris";
-// import { LockIcon } from "@shopify/polaris-icons";
+import { useAppBridge } from "@shopify/app-bridge-react"; // ✅ ADDED
 import he from "he"; // for decoding HTML entities
-// import { useToast } from "./ToastProvider"; // Uncomment if you have a ToastProvider
 
 const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
-  // const [emojis, setEmojis] = useState([{"emoji_code":["&#x1F423;", "&#x1F425;", "&#x1F430;"],"images":['01-img.png', '02-img.png', '03-img.png', '04-img.png', '05-img.png']}]);
+  const shopify = useAppBridge(); // ✅ ADDED (toast needs this)
+
   const [emojis, setEmojis] = useState([]);
   const [festivalSlug, setFestivalSlug] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,7 +14,7 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
   const [upcomingDate, setUpcomingDate] = useState("");
   const emojiModalRef = useRef(null);
 
-  // const { showToast } = useToast(); // Uncomment if you have a ToastProvider
+  /* ---------------- SAVE (UNCHANGED + TOAST ADDED) ---------------- */
 
   const handleSave = async () => {
     try {
@@ -33,13 +31,26 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
       });
 
       if (!res.ok) throw new Error("Failed to save emojis");
-      // showToast && showToast("Emojis saved successfully!");
+
+      // ✅ TOAST ADDED (SUCCESS)
+      shopify.toast.show(
+        `${currentClickedCheckbox} effects saved successfully 🎉`,
+        { duration: 3000 },
+      );
+
       onClose && onClose();
     } catch (err) {
       console.error("Error saving emojis:", err);
-      // showToast && showToast("Failed to save emojis", true);
+
+      // ✅ TOAST ADDED (ERROR)
+      shopify.toast.show(`Failed to save ${currentClickedCheckbox} effects`, {
+        isError: true,
+        duration: 5000,
+      });
     }
   };
+
+  /* ---------------- TOGGLES (UNCHANGED) ---------------- */
 
   const toggleEmoji = (code) => {
     setSelectedEmojis((prev) => {
@@ -57,13 +68,15 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
     });
   };
 
+  /* ---------------- MODAL OPEN (UNCHANGED) ---------------- */
+
   useEffect(() => {
     if (isOpen && emojiModalRef) {
       emojiModalRef?.current.showOverlay();
-    } else if (emojiModalRef) {
-      // emojiModalRef?.current.hideOverlay();
     }
   }, [isOpen]);
+
+  /* ---------------- FETCH EMOJIS (UNCHANGED) ---------------- */
 
   useEffect(() => {
     if (!currentClickedCheckbox) return;
@@ -77,7 +90,6 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
     setLoading(true);
     setEmojis([]);
 
-    // Get upcoming date
     const nextDate = getUpcomingFestivalDate(formattedName);
     setUpcomingDate(nextDate);
 
@@ -87,48 +99,42 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
           signal: controller.signal,
         });
 
-        // Try to parse JSON safely
-        const payload = await res.json().catch((e) => {
-          console.error("Failed to parse JSON:", e);
-          return null;
-        });
+        const payload = await res.json().catch(() => null);
 
-        // HTTP error (non-2xx)
         if (!res.ok) {
-          console.error("Server returned error:", res.status, payload);
           setEmojis([]);
           return;
         }
 
-        // New standard response: { success: true, data: [...], error: null }
-        if (payload && typeof payload === "object") {
-          if (payload.success === true && Array.isArray(payload.data)) {
-            console.log("Fetched emojis data;;;;;;;;:", payload.data);
-            setEmojis(payload.data);
-            return;
+        if (payload?.success === true && payload?.data && Array.isArray(payload.data.emojis) ) {
+          setEmojis(payload.data.emojis);
+
+          // 2️⃣ Hydrate selected emojis & images (NEW)
+          const stored = Array.isArray(payload.data.storeEmojis)
+            ? payload.data.storeEmojis[0]
+            : payload.data.storeEmojis;
+
+          if (stored) {
+            setSelectedEmojis(new Set(stored.emoji_code ?? []));
+            setSelectedImages(new Set(stored.pre_built_images ?? []));
+          } else {
+            setSelectedEmojis(new Set());
+            setSelectedImages(new Set());
           }
 
-          if (payload.success === false) {
-            console.error("API error:", payload.error);
-            setEmojis([]);
-            return;
-          }
+          return;
         }
 
-        // Backwards compatibility: payload itself is an array
         if (Array.isArray(payload)) {
           setEmojis(payload);
           return;
         }
 
-        // Unknown shape
         setEmojis([]);
       } catch (err) {
-        if (err.name === "AbortError") {
-          // fetch was aborted — ignore
-          return;
+        if (err.name !== "AbortError") {
+          console.error("Error fetching emojis:", err);
         }
-        console.error("Error fetching emojis:", err);
         setEmojis([]);
       } finally {
         setLoading(false);
@@ -140,12 +146,16 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  /* ---------------- RENDER (UNCHANGED) ---------------- */
+
   return (
     <s-modal
       onHide={onClose}
       ref={emojiModalRef}
       id="emojiModal"
-      heading={`Pick an emoji to celebrate ${currentClickedCheckbox}! 🎉${upcomingDate ? ` (Next ${currentClickedCheckbox}: ${upcomingDate})` : ""}`}
+      heading={`Pick an emoji to celebrate ${currentClickedCheckbox}! 🎉${
+        upcomingDate ? ` (Next ${currentClickedCheckbox}: ${upcomingDate})` : ""
+      }`}
     >
       <s-paragraph>
         {loading ? (
@@ -157,10 +167,11 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
           <s-text>No emojis found for this festival.</s-text>
         ) : (
           emojis.map((item, idx) => (
-            <div key={idx} style={{ marginBottom: "1rem" }}>
+            <div key={`emojis-${idx}`} style={{ marginBottom: "1rem" }}>
               <div style={{ marginBottom: "8px", fontWeight: 600 }}>
                 Select Emoji
               </div>
+
               <div
                 style={{
                   fontSize: "24px",
@@ -172,16 +183,14 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
               >
                 {item.emoji_code.map((code, i) => (
                   <s-stack
+                    key={i}
                     direction="inline"
                     gap="small"
-                    justifyContent="space-between"
                     alignItems="center"
                   >
                     <s-checkbox
-                      key={i}
-                      label={""} // string label for accessibility
                       checked={selectedEmojis.has(code)}
-                      onChange={() => toggleEmoji(code)} // DOM event; you can also use the event object if needed
+                      onChange={() => toggleEmoji(code)}
                     />
                     <span style={{ fontSize: "28px", lineHeight: "32px" }}>
                       {he.decode(code)}
@@ -193,6 +202,7 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
               <div style={{ marginBottom: "8px", fontWeight: 600 }}>
                 Pre Built Images
               </div>
+
               <div
                 style={{
                   marginBottom: "8px",
@@ -202,26 +212,23 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
                 }}
               >
                 {item.images.map((img, i) => (
-                  <div key={i}>
-                    <s-stack
-                      direction="inline"
-                      gap="small"
-                      justifyContent="space-between"
-                      alignItems="center"
-                    >
-                      <s-checkbox
-                        label={``}
-                        checked={selectedImages.has(img)}
-                        onChange={(event) => toggleImage(img)}
-                      />
-                      <img
-                        style={{ fontSize: "28px", lineHeight: "32px" }}
-                        src={`/assets/images/festival_images/${festivalSlug}/${img}`}
-                        alt={`emoji ${i}`}
-                        width={32}
-                      />
-                    </s-stack>
-                  </div>
+                  <s-stack
+                    key={i}
+                    direction="inline"
+                    gap="small"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <s-checkbox
+                      checked={selectedImages.has(img)}
+                      onChange={() => toggleImage(img)}
+                    />
+                    <img
+                      src={`/assets/images/festival_images/${festivalSlug}/${img}`}
+                      width={32}
+                      alt=""
+                    />
+                  </s-stack>
                 ))}
               </div>
 
@@ -283,12 +290,7 @@ const ModelBox = ({ currentClickedCheckbox, isOpen, onClose }) => {
         )}
       </s-paragraph>
 
-      <s-button
-        slot="secondary-actions"
-        commandFor="emojiModal"
-        command="--hide"
-        onClick={onClose}
-      >
+      <s-button slot="secondary-actions" onClick={onClose}>
         Close
       </s-button>
 
